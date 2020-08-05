@@ -1,36 +1,36 @@
-const Type = require('../models/Type');
+const Sauce = require('../models/Sauce');
 const fs = require('fs');
 
-exports.createType = (req, res, next) => {
-    const typeObject = JSON.parse(req.body.sauce);
-    delete typeObject._id;
-    const type = new Type({
-      ...typeObject,
-      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
-  
+exports.createSauce = (req, res, next) => {
+    const sauceObject = JSON.parse(req.body.sauce);
+    delete sauceObject._id;
+    const sauce = new Sauce({
+      ...sauceObject,
+      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`,
     });
-    type.save()
+    sauce.save()
       .then(() => res.status(201).json({ message: 'Sauce enregistrée !'}))
       .catch(error => res.status(400).json({ error }));
+      
   }
 
-  exports.modifyType = (req, res, next) => {
-    const typeObject = req.file ?
+  exports.modifySauce = (req, res, next) => {
+    const sauceObject = req.file ?
     {
-      ...JSON.parse(req.body.type),
+      ...JSON.parse(req.body.sauce),
       imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
     } : { ...req.body };
-    Type.updateOne({ _id: req.params.id }, { ...typeObject, _id: req.params.id })
+    Sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id })
       .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
       .catch(error => res.status(400).json({ error }));
   }
 
-  exports.deleteType =(req, res, next) => {
-    Type.findOne({ _id: req.params.id })
-      .then(type => {
-        const filename = type.imageUrl.split('/images/')[1];
+  exports.deleteSauce =(req, res, next) => {
+    Sauce.findOne({ _id: req.params.id })
+      .then(sauce => {
+        const filename = sauce.imageUrl.split('/images/')[1];
         fs.unlink(`images/${filename}`, () => {
-         Type.deleteOne({ _id: req.params.id })
+         Sauce.deleteOne({ _id: req.params.id })
           .then(() => res.status(200).json({ message: 'Sauce supprimée !'}))
           .catch(error => res.status(400).json({ error }));
         });
@@ -38,14 +38,100 @@ exports.createType = (req, res, next) => {
       .catch(error => res.status(500).json({ error }));
   };
 
-  exports.getOneType = (req, res, next) => {
-    Type.findOne({ _id: req.params.id })
-      .then(type => res.status(200).json(type))
+  exports.getOneSauce = (req, res, next) => {
+    Sauce.findOne({ _id: req.params.id })
+      .then(sauce => res.status(200).json(sauce))
       .catch(error => res.status(404).json({ error }));
-  }
+  };
 
-  exports.getAllType = (req, res, next) => {
-    Type.find()
-      .then(types => res.status(200).json(types))
+  exports.getAllSauces = (req, res, next) => {
+    Sauce.find()
+      .then(sauces => res.status(200).json(sauces))
       .catch(error => res.status(400).json({ error }));
-  }
+  };
+
+  exports.likeSauce = (req, res, next) => {
+    switch (req.body.like) {
+      //Vérifier si l'inscrit a déjà exprimé un avis positif ou négatif.
+      case 0:
+        Sauce.findOne({ _id: req.params.id })
+          .then((sauce) => {
+            if (sauce.usersLiked.find((user) => user === req.body.userId)) {
+              Sauce.updateOne(
+                { _id: req.params.id },
+                {
+                  $inc: { likes: -1 },
+                  $pull: { usersLiked: req.body.userId },
+                  _id: req.params.id,
+                }
+              )
+                .then(() => {
+                  res.status(200).json({ message: "Votre avis a été supprimé" });
+                })
+                .catch((error) => {
+                  res.status(400).json({ error: error });//Bad Request
+                });
+            }
+            if (sauce.usersDisliked.find((user) => user === req.body.userId)) {
+              Sauce.updateOne(
+                { _id: req.params.id },
+                {
+                  $inc: { dislikes: -1 },
+                  $pull: { usersDisliked: req.body.userId },
+                  _id: req.params.id,
+                }
+              )
+                .then(() => {
+                  res.status(200).json({ message: "Votre avis a été supprimé" });
+                })
+                .catch((error) => {
+                  res.status(400).json({ error: error });
+                });
+            }
+          })
+          .catch((error) => {
+            res.status(404).json({ error: error });//ressource est introuvable
+          });
+        break;
+      
+      //1 like
+      case 1:
+        Sauce.updateOne(
+          { _id: req.params.id },
+          {
+            $inc: { likes: 1 },
+            $push: { usersLiked: req.body.userId },
+            _id: req.params.id,
+          }
+        )
+          .then(() => {
+            res
+              .status(200)
+              .json({ message: "Merci ! Votre avis a été pris en compte" });
+          })
+          .catch((error) => {
+            res.status(400).json({ error: error });
+          });
+        break;
+      // 1 dislike
+      case -1:
+        Sauce.updateOne(
+          { _id: req.params.id },
+          {
+            $inc: { dislikes: 1 },
+            $push: { usersDisliked: req.body.userId },
+            _id: req.params.id,
+          }
+        )
+          .then(() => {
+            res
+              .status(200)
+              .json({ message: "Merci ! Votre avis a été pris en compte!" });
+          })
+          .catch((error) => {
+            res.status(400).json({ error: error });
+          });
+        break;
+    }
+  };
+  
